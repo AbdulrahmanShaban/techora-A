@@ -1,0 +1,150 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    function userDoc(uid) { return get(/databases/$(database)/documents/users/$(uid)).data; }
+    // المدرس: دور محفوظ في مستند المستخدم ولا يمكن تغييره بعد تحديده
+    function isTeacher() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && userDoc(request.auth.uid).get('role', 'student') == 'teacher'; }
+    // المدرس يقرأ بيانات الطالب فقط إذا انضم الطالب لأحد فصوله (teacherIds يُملأ عند الانضمام ويتحقق منه القانون)
+    function teacherOf(uid) { return isTeacher() && (request.auth.uid in userDoc(uid).get('teacherIds', [])); }
+    function canRead(uid) { return isOwner(uid) || teacherOf(uid); }
+    function lessonOk(id) { return id.matches('^g[12]t1(l[0-9]{1,2}|u[12]l[1-4])$'); }
+    function starsFor(r, t) { return r * 10 >= t * 9 ? 3 : (r * 10 >= t * 7 ? 2 : (r * 10 >= t * 4 ? 1 : 0)); }
+
+    // ---- الفصول: يديرها المدرس صاحبها فقط. كود الفصل = معرّف المستند ----
+    match /classes/{cid} {
+      allow get: if signedIn();                                   // للتحقق من الكود عند الانضمام
+      allow list: if isTeacher() && resource.data.teacherUid == request.auth.uid;
+      allow create: if isTeacher() && cid.matches('^[A-Z0-9]{6,8}$')
+        && request.resource.data.keys().hasOnly(['teacherUid','teacherName','name','grade','createdAt'])
+        && request.resource.data.teacherUid == request.auth.uid
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 60
+        && request.resource.data.grade in ['g1','g2','all']
+        && request.resource.data.createdAt == request.time;
+      allow update: if isTeacher() && resource.data.teacherUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','grade'])
+        && request.resource.data.name.size() <= 60;
+      allow delete: if isTeacher() && resource.data.teacherUid == request.auth.uid;
+
+      match /members/{sid} {
+        allow get, list: if isOwner(sid) || (isTeacher() && get(/databases/$(database)/documents/classes/$(cid)).data.teacherUid == request.auth.uid);
+        allow create: if isOwner(sid) && exists(/databases/$(database)/documents/classes/$(cid))
+          && request.resource.data.keys().hasOnly(['uid','displayName','email','joinedAt'])
+          && request.resource.data.uid == sid
+          && request.resource.data.joinedAt == request.time;
+        allow delete: if isOwner(sid) || (isTeacher() && get(/databases/$(database)/documents/classes/$(cid)).data.teacherUid == request.auth.uid);
+        allow update: if false;
+      }
+    }
+
+    // ---- ملف المستخدم ----
+    match /users/{uid} {
+      allow read: if canRead(uid);
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['displayName','email','photoURL','theme','lastLesson','createdAt','role'])
+        && request.resource.data.createdAt == request.time
+        && (!('role' in request.resource.data) || request.resource.data.role in ['student','teacher']);
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName','email','photoURL','theme','lastLesson','role','classIds','teacherIds'])
+        && (!('theme' in request.resource.data) || request.resource.data.theme in ['emerald','arctic','obsidian','mono'])
+        && (!('displayName' in request.resource.data) || request.resource.data.displayName.size() <= 80)
+        && (!('lastLesson' in request.resource.data) || (request.resource.data.lastLesson.path.matches('^grade-[12]/term-1/[a-z0-9-]+/$') && request.resource.data.lastLesson.title.size() <= 80))
+        // الدور: يُحدَّد مرة واحدة فقط (student أو teacher). لا يوجد دور admin ولا يمكن إنشاؤه من المتصفح.
+        && (!('role' in request.resource.data.diff(resource.data).affectedKeys())
+            || (!('role' in resource.data) && request.resource.data.role in ['student','teacher']))
+        // الانضمام/المغادرة: الطالب فقط، وبالتزامن مع مستند العضوية
+        && (!(request.resource.data.diff(resource.data).affectedKeys().hasAny(['classIds','teacherIds'])) || validMembership(uid));
+      allow delete: if false;
+
+      match /progress/{lessonId} {
+        allow read: if canRead(uid);
+        allow create: if isOwner(uid) && lessonOk(lessonId) && validProgress(request.resource.data, lessonId)
+          && request.resource.data.attempts == 1 && request.resource.data.updatedAt == request.time
+          && (request.resource.data.completed ? request.resource.data.completedAt == request.time : !('completedAt' in request.resource.data));
+        allow update: if isOwner(uid) && validProgress(request.resource.data, lessonId)
+          && request.resource.data.attempts == resource.data.attempts + 1
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.gameXp >= resource.data.gameXp
+          && request.resource.data.bonusXp >= resource.data.bonusXp
+          && (!resource.data.completed || (request.resource.data.completed && request.resource.data.completedAt == resource.data.completedAt))
+          && (resource.data.completed || !request.resource.data.completed || request.resource.data.completedAt == request.time);
+        allow delete: if false;
+      }
+
+      match /quizResults/{rid} {
+        allow read: if canRead(uid);
+        allow create: if isOwner(uid) && lessonOk(request.resource.data.lessonId)
+          && request.resource.data.keys().hasOnly(['lessonId','title','right','total','pct','stars','score','at','byType','wrong'])
+          && request.resource.data.total is int && request.resource.data.total > 0 && request.resource.data.total <= 200
+          && request.resource.data.right is int && request.resource.data.right >= 0 && request.resource.data.right <= request.resource.data.total
+          && request.resource.data.stars == starsFor(request.resource.data.right, request.resource.data.total)
+          && request.resource.data.pct == math.round(request.resource.data.right * 100.0 / request.resource.data.total)
+          && request.resource.data.score is int && request.resource.data.score >= 0 && request.resource.data.score <= 100000
+          && request.resource.data.title is string && request.resource.data.title.size() <= 80
+          && (!('byType' in request.resource.data) || (request.resource.data.byType is map && request.resource.data.byType.size() <= 6))
+          && (!('wrong' in request.resource.data) || (request.resource.data.wrong is list && request.resource.data.wrong.size() <= 12))
+          && request.resource.data.at == request.time;
+        allow update, delete: if false;
+      }
+
+      match /activity/{aid} {
+        allow read: if canRead(uid);
+        allow create: if isOwner(uid)
+          && request.resource.data.keys().hasOnly(['type','title','lessonId','xp','at'])
+          && request.resource.data.type in ['lesson','quiz']
+          && request.resource.data.title is string && request.resource.data.title.size() <= 120
+          && lessonOk(request.resource.data.lessonId)
+          && request.resource.data.xp is int && request.resource.data.xp >= 0 && request.resource.data.xp <= 200
+          && request.resource.data.at == request.time;
+        allow update, delete: if false;
+      }
+
+      match /achievements/{bid} {
+        allow read: if canRead(uid);
+        allow create: if isOwner(uid)
+          && bid in ['first-lesson','three-lessons','six-lessons','ten-lessons','all-lessons','first-star3','five-star3','xp-500','grade1-done','grade2-done']
+          && request.resource.data.keys().hasOnly(['id','earnedAt','source'])
+          && request.resource.data.id == bid
+          && request.resource.data.earnedAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+
+    function validProgress(d, lessonId) {
+      return d.keys().hasOnly(['lessonId','title','right','total','stars','gameXp','bonusXp','completed','completedAt','attempts','updatedAt'])
+        && d.lessonId == lessonId
+        && d.title is string && d.title.size() <= 80
+        && d.total is int && d.total > 0 && d.total <= 200
+        && d.right is int && d.right >= 0 && d.right <= d.total
+        && d.stars == starsFor(d.right, d.total)
+        && d.gameXp == d.right * 2 + d.stars * 10
+        && d.bonusXp == (d.right * 100 >= d.total * 60 ? 50 : 0)
+        && d.completed is bool
+        && d.completed == (d.bonusXp == 50);
+    }
+
+    // انضمام: classIds تزيد واحدًا (آخر عنصر = كود فصل موجود وعضويتي فيه تُنشأ في نفس الدفعة)
+    //         وteacherIds تزيد معرّف مدرس ذلك الفصل بالضبط.
+    // مغادرة: كلتاهما تنقص عنصرًا واحدًا (تقليل صلاحيات المدرس فقط).
+    function validMembership(uid) {
+      let old = resource.data;
+      let nw = request.resource.data;
+      let oc = old.get('classIds', []);
+      let ot = old.get('teacherIds', []);
+      return nw.get('classIds', []).size() <= 20 && nw.get('teacherIds', []).size() <= 20
+        && (
+          (nw.classIds.size() == oc.size() + 1
+            && nw.teacherIds == ot.concat([get(/databases/$(database)/documents/classes/$(nw.classIds[oc.size()])).data.teacherUid])
+            && nw.classIds[0:oc.size()] == oc
+            && !(nw.classIds[oc.size()] in oc)
+            && existsAfter(/databases/$(database)/documents/classes/$(nw.classIds[oc.size()])/members/$(uid)))
+          ||
+          (nw.get('classIds', []).size() == oc.size() - 1 && nw.get('teacherIds', []).size() == ot.size() - 1)
+        );
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}
