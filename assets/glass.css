@@ -1,0 +1,26 @@
+/* Techora Glass — نظام الزجاج (Glassmorphism) المركزي. يعتمد على متغيرات CMAT فيتوافق مع كل السمات. */
+:root{--gl-blur:16px;--gl-brd:color-mix(in srgb,var(--text) 15%,transparent);--gl-hi:rgba(255,255,255,.2);--gl-sh:rgba(0,0,0,.5);--gl-fill:62%}
+html[data-theme="arctic"],html[data-theme="mono"]{--gl-hi:rgba(255,255,255,.95);--gl-sh:rgba(16,45,32,.28);--gl-brd:color-mix(in srgb,var(--text) 13%,transparent);--gl-fill:72%}
+html[data-theme="obsidian"]{--gl-hi:rgba(214,182,109,.22)}
+/* خلفية بإضاءات ناعمة خلف الزجاج */
+html:not([data-cmat-dark]) body::before{content:"";position:fixed;inset:-10vh -10vw;z-index:-1;pointer-events:none;background:radial-gradient(38vw 38vw at 85% 6%,color-mix(in srgb,var(--green) 24%,transparent),transparent 70%),radial-gradient(34vw 34vw at 6% 68%,color-mix(in srgb,var(--mint) 15%,transparent),transparent 70%),radial-gradient(30vw 30vw at 62% 108%,color-mix(in srgb,var(--gold) 10%,transparent),transparent 70%)}
+/* البطاقات الزجاجية */
+html:not([data-cmat-dark]) body :is(.card,.wrap .hero,.acc,.hud,.q,.res,.fig,.vid,.screen-card,.project-card,.float-chip,.lesson,.stat,.clcard,.bd,.rolebtn,.filters,#side){background:radial-gradient(420px circle at var(--mx,50%) var(--my,-30%),color-mix(in srgb,#fff 13%,transparent),transparent 55%),linear-gradient(135deg,color-mix(in srgb,var(--text) 8%,transparent),color-mix(in srgb,var(--text) 1%,transparent)),color-mix(in srgb,var(--panel2) var(--gl-fill),transparent);-webkit-backdrop-filter:blur(var(--gl-blur)) saturate(145%);backdrop-filter:blur(var(--gl-blur)) saturate(145%);border:1px solid var(--gl-brd);box-shadow:0 1px 0 var(--gl-hi) inset,0 20px 50px -22px var(--gl-sh),0 2px 8px rgba(0,0,0,.1);transition:transform .28s cubic-bezier(.2,.7,.2,1),box-shadow .28s,border-color .28s;animation:glIn .6s cubic-bezier(.2,.7,.2,1) backwards;animation-delay:calc(var(--i,0)*50ms)}
+html:not([data-cmat-dark]) body :is(.card,.wrap .hero,.acc,.hud,.q,.res,.fig,.vid,.screen-card,.project-card,.float-chip,.lesson,.stat,.clcard,.bd,.rolebtn,.filters,#side):hover{border-color:color-mix(in srgb,var(--green) 55%,var(--gl-brd));box-shadow:0 1px 0 var(--gl-hi) inset,0 28px 60px -22px var(--gl-sh),0 0 0 1px color-mix(in srgb,var(--green) 18%,transparent)}
+/* النصوص الطويلة: تعتيم أعلى للحفاظ على التباين */
+html:not([data-cmat-dark]) body :is(.acc,.q,.res,.wrap .hero,.card,.tip){--gl-fill:78%}
+html[data-theme="arctic"] body :is(.acc,.q,.res,.wrap .hero,.card,.tip),html[data-theme="mono"] body :is(.acc,.q,.res,.wrap .hero,.card,.tip){--gl-fill:86%}
+/* ميل ثلاثي الأبعاد خفيف (يُفعّله glass.js للبطاقات الصغيرة فقط) */
+html body .gl-t{transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateZ(0);will-change:transform}
+html body .gl-t.gl-hv{transition:transform .08s linear,box-shadow .28s,border-color .28s}
+/* شريط علوي زجاجي */
+html:not([data-cmat-dark]) body :is(.top,.topbar){-webkit-backdrop-filter:blur(14px) saturate(150%);backdrop-filter:blur(14px) saturate(150%)}
+@keyframes glIn{from{opacity:.35;transform:translateY(18px) scale(.985)}}
+@supports (animation-timeline:view()){html:not([data-cmat-dark]) body :is(.card,.wrap .hero,.acc,.hud,.q,.res,.fig,.vid,.screen-card,.project-card,.float-chip,.lesson,.stat,.clcard,.bd,.rolebtn,.filters,#side){animation:glIn linear backwards;animation-timeline:view();animation-range:entry 0% cover 24%;animation-delay:0s}}
+/* بدائل */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){html:not([data-cmat-dark]) body :is(.card,.wrap .hero,.acc,.hud,.q,.res,.fig,.vid,.screen-card,.project-card,.float-chip,.lesson,.stat,.clcard,.bd,.rolebtn,.filters,#side){background:var(--panel2)}}
+@media (prefers-reduced-motion:reduce){html:not([data-cmat-dark]) body :is(.card,.wrap .hero,.acc,.hud,.q,.res,.fig,.vid,.screen-card,.project-card,.float-chip,.lesson,.stat,.clcard,.bd,.rolebtn,.filters,#side){animation:none!important;transition:none!important}html body .gl-t{transform:none!important}}
+@media (prefers-reduced-transparency:reduce){html:not([data-cmat-dark]) body :is(.card,.wrap .hero,.acc,.hud,.q,.res,.fig,.vid,.screen-card,.project-card,.float-chip,.lesson,.stat,.clcard,.bd,.rolebtn,.filters,#side){-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--panel2)}}
+@media print{*{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;box-shadow:none!important;animation:none!important}body::before{display:none!important}}
+/* شبكة أمان: لا يخرج أي عنصر خارج عرض الشاشة */
+html:not([data-cmat-dark]),html:not([data-cmat-dark]) body{overflow-x:clip}

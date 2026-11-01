@@ -23,6 +23,8 @@ function apply(n){cur=n;var eff=(document.documentElement.hasAttribute('data-cma
  var m=document.querySelector('meta[name=theme-color]');if(!m){m=document.createElement('meta');m.name='theme-color';document.head&&document.head.appendChild(m)}m.content=T[eff].v['--bg'];
  var p=document.getElementById('cmatPanel');if(p)[].forEach.call(p.querySelectorAll('.o'),function(b){b.classList.toggle('sel',b.dataset.t===n)})}
 document.documentElement.appendChild(st);apply(cur);
+(function(){var me=document.currentScript,b=me&&me.src?me.src.replace(/theme\.js.*$/,''):'';if(!b)return;
+ try{document.write('<link rel="stylesheet" href="'+b+'glass.css"><script src="'+b+'glass.js" defer><\/script>')}catch(e){var l=document.createElement('link');l.rel='stylesheet';l.href=b+'glass.css';document.head.appendChild(l);var j=document.createElement('script');j.src=b+'glass.js';j.defer=true;document.head.appendChild(j)}})();
 var TT=window.TTheme={list:T,get:function(){return cur},
  set:function(n,save){if(!T[n])return;apply(n);try{localStorage.setItem(KEY,n)}catch(e){}
   if(save!==false&&window.TData&&TData.saveTheme)TData.saveTheme(n)},
