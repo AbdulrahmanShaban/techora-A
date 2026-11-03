@@ -114,3 +114,48 @@ if(window.TA&&TA.auth){var last=null;TA.auth.onAuthStateChanged(function(u){
  D.ensureUser(u).then(function(d){if(d&&d.theme)TTheme.fromCloud(d.theme);else{var l=TTheme.get();if(l&&l!=='emerald')D.saveTheme(l)}});
  D.flushLogin();var m=location.pathname.match(/(grade-[12]\/term-1\/[a-z0-9-]+\/)(content|activity)\.html/);if(m){var c=CAT.filter(function(x){return x.path===m[1]})[0];if(c)D.touch(c.path,c.title)}})}
 })();
+
+/* ======================================================================
+   Techora — نظام الخطوات التعليمية وحفظ التقدم (LocalStorage)
+   - تقسيم الدرس إلى خطوات من نفس أقسامه (بدون حذف أو اختصار).
+   - معرّفات ثابتة: لكل درس (g1t1l3) ولكل خطوة (s1..sN).
+   - مفتاح التخزين لكل مستخدم على نفس المتصفح: techora.steps.v1.<uid|guest>.<lessonId>
+   ====================================================================== */
+(function(){
+var NS='techora.steps.v1',mem={},ok=true;try{localStorage.setItem('__t','1');localStorage.removeItem('__t')}catch(e){ok=false}
+function scope(){try{var u=window.TA&&TA.auth&&TA.auth.currentUser;if(u&&u.uid)return u.uid}catch(e){}return'guest'}
+function K(sc,id){return NS+'.'+sc+'.'+id}
+function blank(){return{v:1,done:{},total:0,last:null,updated:0}}
+function read(id,sc){sc=sc||scope();var raw=null;try{raw=ok?localStorage.getItem(K(sc,id)):mem[K(sc,id)]}catch(e){}
+ if(!raw&&!ok)raw=mem[K(sc,id)];if(!raw)return blank();try{var o=JSON.parse(raw);if(!o||typeof o.done!=='object'||Array.isArray(o.done))return blank();return o}catch(e){return blank()}}
+function write(id,o,sc){sc=sc||scope();var s=JSON.stringify(o);try{if(ok)localStorage.setItem(K(sc,id),s);else mem[K(sc,id)]=s}catch(e){mem[K(sc,id)]=s;ok=false}}
+function strip(h){return String(h||'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim()}
+var TS_={persistent:function(){return ok},
+ lessonIdFromPath:function(p){var m=String(p||'').match(/grade-([12])\/term-1\/(l\d+|u\d-l\d)\//);if(!m)return null;return'g'+m[1]+'t1'+m[2].replace('-','')},
+ get:function(id,sc){return read(id,sc)},
+ isDone:function(id,stepId,sc){return!!read(id,sc).done[stepId]},
+ /* تسجيل إكمال خطوة: لا تُحتسب أكثر من مرة */
+ complete:function(id,stepId,total,sc){var o=read(id,sc);var added=false;if(!o.done[stepId]){o.done[stepId]=Date.now();added=true}
+  if(total)o.total=total;o.last=stepId;o.updated=Date.now();write(id,o,sc);return{added:added,count:Object.keys(o.done).length}},
+ visit:function(id,stepId,total,sc){var o=read(id,sc);o.last=stepId;if(total)o.total=total;write(id,o,sc)},
+ /* تقسيم الدرس إلى خطوات (دالة نقية: نفس النتيجة في المتصفح وعند توليد الفهرس) */
+ plan:function(c,hasMedia){var S=c.sections,steps=[],cur={title:'مقدمة الدرس',items:[{k:'hero'}],w:1e6},i=0;
+  for(;i<S.length&&!S[i].h;i++)cur.items.push({k:'sec',i:i});steps.push(cur);cur=null;
+  for(;i<S.length;i++){var s=S[i];if(s.h){if(cur)steps.push(cur);cur={title:strip(s.h),items:[],w:0}}cur.items.push({k:'sec',i:i});cur.w+=JSON.stringify(s).length}
+  if(cur)steps.push(cur);
+  var out=[];for(var j=0;j<steps.length;j++){var t=steps[j];if(j>0&&t.w<420&&j<steps.length-1){steps[j+1].items=t.items.concat(steps[j+1].items);steps[j+1].w+=t.w;steps[j+1].title=t.title;continue}out.push(t)}
+  if(hasMedia)out.push({title:'صور توضيحية وفيديو تعليمي',items:[{k:'media'}],w:0});
+  out.push({title:'الخلاصة وتطبيق الدرس',items:[{k:'summary'}],w:0});
+  out.forEach(function(s,n){s.id='s'+(n+1)});return out},
+ /* ملخّص كل الدروس: النسب من الخطوات المكتملة فعليًا */
+ summary:function(sc){var IDX=window.TSTEPS_INDEX||{},cat=(window.TData&&TData.CAT)||[],L=[],tn=0,td=0;
+  cat.forEach(function(c){var o=read(c.id,sc),ix=IDX[c.id],n=(o.total&&(!ix||o.total!==ix.n)&&o.total)||(ix&&ix.n)||o.total||0,ids=ix?ix.ids:null,done;
+   if(ids&&n===ix.n)done=ids.filter(function(s){return o.done[s]}).length;else done=Object.keys(o.done).filter(function(s){var m=+s.slice(1);return m>=1&&m<=n}).length;
+   var first=0;if(ids&&n===ix.n){first=ids.findIndex(function(s){return!o.done[s]});if(first<0)first=n}else{while(first<n&&o.done['s'+(first+1)])first++}
+   var pct=n?Math.round(done/n*100):0,st=done===0?'new':(n&&done>=n?'done':'progress');
+   L.push({id:c.id,title:c.title,grade:c.grade,path:c.path,n:n,done:done,pct:pct,status:st,first:Math.min(first,Math.max(n-1,0)),updated:o.updated||0});tn+=n;td+=done});
+  return{lessons:L,overall:{n:tn,done:td,pct:tn?Math.round(td/tn*100):0,lessons:L.length,finished:L.filter(function(x){return x.status==='done'}).length,started:L.filter(function(x){return x.status!=='new'}).length}}},
+ /* اقتراح «متابعة التعلم»: آخر درس قيد التقدّم ثم أول درس لم يبدأ */
+ resume:function(sc){var s=TS_.summary(sc).lessons,p=s.filter(function(x){return x.status==='progress'}).sort(function(a,b){return b.updated-a.updated})[0];if(p)return p;return s.filter(function(x){return x.status==='new'&&x.n})[0]||null}};
+window.TSteps=TS_;
+})();
