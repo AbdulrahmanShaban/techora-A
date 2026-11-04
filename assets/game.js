@@ -6,15 +6,15 @@ var AC=null,mute=false;function beep(ok){if(mute)return;try{AC=AC||new(window.Au
 function toast(t){var d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);setTimeout(function(){d.remove()},1450)}
 function confetti(){var c=['🎉','⭐','✨','🟢','💚','🎊'];for(var i=0;i<48;i++){var d=document.createElement('div');d.className='cf';d.textContent=c[i%c.length];d.style.left=Math.random()*100+'vw';d.style.animationDuration=(2+Math.random()*2.2)+'s';d.style.animationDelay=Math.random()*.6+'s';document.body.appendChild(d);(function(x){setTimeout(function(){x.remove()},5200)})(d)}}
 function el(h){var d=document.createElement('div');d.innerHTML=h;return d.firstChild}
-window.TGame={start:function(cfg){var TR={types:{},wrong:[]};function strip(h){return String(h).replace(/<[^>]*>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim().slice(0,110)}function track(t,q,ok){var b=TR.types[t]||(TR.types[t]={r:0,t:0});b.t++;if(ok)b.r++;else if(TR.wrong.length<10)TR.wrong.push({q:strip(q),t:t})}
- var root=$(cfg.mount),L=0,I=0,score=0,streak=0,hearts=3,right=0,total=0,best=0,key='techora_best_'+cfg.id,locked=false;
+window.TGame={start:function(cfg){var MAXH=6;var TR={types:{},wrong:[]};function strip(h){return String(h).replace(/<[^>]*>/g,'').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim().slice(0,110)}function track(t,q,ok){var b=TR.types[t]||(TR.types[t]={r:0,t:0});b.t++;if(ok)b.r++;else if(TR.wrong.length<10)TR.wrong.push({q:strip(q),t:t})}
+ var root=$(cfg.mount),L=0,I=0,score=0,streak=0,hearts=MAXH,right=0,total=0,best=0,key='techora_best_'+cfg.id,locked=false;
  try{best=+localStorage.getItem(key)||0}catch(e){}
  function totalQ(){return cfg.levels.reduce(function(n,l){return n+(l.type==='match'?l.rounds.reduce(function(m,r){return m+r.length},0):l.type==='order'?l.items.reduce(function(m,r){return m+r.seq.length},0):l.n||l.items.length)},0)}
  var all=totalQ(),done=0,cur=[];
- function hud(){return '<div class="hud"><span>⭐ '+score+'</span><span class="hearts">'+'❤️'.repeat(hearts)+'🖤'.repeat(3-hearts)+'</span><span>المستوى '+(L+1)+' / '+cfg.levels.length+'</span><span>🔥 '+streak+'</span><button class="mu" id="mu">'+(mute?'🔇':'🔊')+'</button></div><div class="bar"><i style="width:'+Math.min(100,Math.round(done/all*100))+'%"></i></div>'}
+ function hud(){return '<div class="hud"><span>⭐ '+score+'</span><span class="hearts">'+'❤️'.repeat(hearts)+'🖤'.repeat(MAXH-hearts)+'</span><span>المستوى '+(L+1)+' / '+cfg.levels.length+'</span><span>🔥 '+streak+'</span><button class="mu" id="mu">'+(mute?'🔇':'🔊')+'</button></div><div class="bar"><i style="width:'+Math.min(100,Math.round(done/all*100))+'%"></i></div>'}
  function av(){return cfg.avatar?'<img class="av" src="'+cfg.avatar+'" onerror="this.onerror=null;this.src=\''+cfg.avatarFallback+'\'" alt="">':''}
- function intro(){root.innerHTML='<div class="res">'+(av()||'<div class="st">🎮</div>')+'<h2>'+cfg.title+'</h2><p>'+cfg.levels.length+' مستويات • '+all+' سؤال/مهمة • عندك 3 قلوب في كل مستوى</p><p>'+(best?'أعلى نتيجة ليك: <b>'+best+'</b>':'ابدأ وسجّل أول نتيجة!')+'</p><div class="row"><button class="btn p" id="go">ابدأ اللعب ▶</button></div></div>';$('#go').onclick=function(){L=0;score=0;streak=0;right=0;done=0;total=0;TR.types={};TR.wrong=[];startLevel()}}
- function startLevel(){var lv=cfg.levels[L];hearts=3;I=0;
+ function intro(){root.innerHTML='<div class="res">'+(av()||'<div class="st">🎮</div>')+'<h2>'+cfg.title+'</h2><p>'+cfg.levels.length+' مستويات • '+all+' سؤال/مهمة • عندك 6 قلوب في كل مستوى</p><p>'+(best?'أعلى نتيجة ليك: <b>'+best+'</b>':'ابدأ وسجّل أول نتيجة!')+'</p><div class="row"><button class="btn p" id="go">ابدأ اللعب ▶</button></div></div>';$('#go').onclick=function(){L=0;score=0;streak=0;right=0;done=0;total=0;TR.types={};TR.wrong=[];startLevel()}}
+ function startLevel(){var lv=cfg.levels[L];hearts=MAXH;I=0;
   if(lv.type==='match'){cur=lv.rounds.slice()}else{cur=shuf(lv.items).slice(0,lv.n||lv.items.length)}
   show()}
  function show(){var lv=cfg.levels[L];if(I>=cur.length)return endLevel(true);locked=false;

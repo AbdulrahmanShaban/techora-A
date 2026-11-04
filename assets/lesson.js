@@ -53,6 +53,7 @@ function build(c,m){
  $('stpPrev').onclick=function(){show(cur-1)};
  $('stpNext').onclick=function(){if(!$('stpNext').disabled)show(cur+1)};
  $('stpDone').onclick=function(){var r=TSteps.complete(lid,S[cur].id,N);st=TSteps.get(lid);paint();
+  if(r.added&&first()>=N&&window.TData&&TData.completeLesson&&/^g[12]t1/.test(lid))TData.completeLesson(lid);
   if(r.added&&!TSteps.persistent())$('stpMsg').textContent='⚠ تعذّر الحفظ على هذا المتصفح (وضع التصفح الخاص). سيبقى التقدم حتى إغلاق الصفحة فقط.'}
  dots.forEach(function(d){d.onclick=function(){show(+d.dataset.i)}});
  document.addEventListener('keydown',function(e){if(/INPUT|TEXTAREA|SELECT/.test((e.target||{}).tagName||''))return;if(e.key==='ArrowLeft')$('stpNext').onclick();else if(e.key==='ArrowRight')$('stpPrev').onclick()});

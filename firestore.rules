@@ -89,6 +89,17 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // ---- إكمال درس عبر الأجزاء: مستند واحد لكل درس (معرّف المستند = معرّف الدرس) فلا تتكرر المكافأة ----
+      match /lessonDone/{lid} {
+        allow read: if canRead(uid);
+        allow create: if isOwner(uid) && lessonOk(lid)
+          && request.resource.data.keys().hasOnly(['lessonId','xp','at'])
+          && request.resource.data.lessonId == lid
+          && request.resource.data.xp == 100
+          && request.resource.data.at == request.time;
+        allow update, delete: if false;
+      }
+
       match /activity/{aid} {
         allow read: if canRead(uid);
         allow create: if isOwner(uid)
@@ -137,7 +148,7 @@ service cloud.firestore {
         && (
           (nw.classIds.size() == oc.size() + 1
             && nw.teacherIds == ot.concat([get(/databases/$(database)/documents/classes/$(nw.classIds[oc.size()])).data.teacherUid])
-            && nw.classIds[0:oc.size()] == oc
+            && nw.classIds.hasAll(oc)
             && !(nw.classIds[oc.size()] in oc)
             && existsAfter(/databases/$(database)/documents/classes/$(nw.classIds[oc.size()])/members/$(uid)))
           ||

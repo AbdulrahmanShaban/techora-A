@@ -57,13 +57,13 @@ var D=window.TData={CAT:CAT,BADGES:BADGES,level:lvl,stars:stars,
  myClasses:function(){var d=DB(),u=TA.auth.currentUser;return d.collection('classes').where('teacherUid','==',u.uid).get().then(function(q){var a=[];q.forEach(function(x){var v=x.data();v.id=x.id;a.push(v)});a.sort(function(x,y){return(x.name||'').localeCompare(y.name||'','ar')});return a})},
  _ms:function(t){return t&&t.toMillis?t.toMillis():t&&t.toDate?t.toDate().getTime():0},
  loadStudent:function(uid){var d=DB(),r=d.collection('users').doc(uid);
-  return Promise.all([r.get(),r.collection('progress').get(),r.collection('quizResults').orderBy('at','desc').limit(300).get(),r.collection('activity').orderBy('at','desc').limit(30).get()]).then(function(a){
-   var P={};a[1].forEach(function(x){P[x.id]=x.data()});var res=a[2].docs.map(function(x){var v=x.data();v.at=D._ms(v.at);return v}),act=a[3].docs.map(function(x){var v=x.data();v.at=D._ms(v.at);return v}),u=a[0].exists?a[0].data():{};
-   return{uid:uid,profile:u,progress:P,results:res,activity:act}})},
+  return Promise.all([r.get(),r.collection('progress').get(),r.collection('quizResults').orderBy('at','desc').limit(300).get(),r.collection('activity').orderBy('at','desc').limit(30).get(),r.collection('lessonDone').get()]).then(function(a){
+   var P={},LD={};a[4].forEach(function(x){LD[x.id]=1});a[1].forEach(function(x){P[x.id]=x.data()});var res=a[2].docs.map(function(x){var v=x.data();v.at=D._ms(v.at);return v}),act=a[3].docs.map(function(x){var v=x.data();v.at=D._ms(v.at);return v}),u=a[0].exists?a[0].data():{};
+   return{uid:uid,profile:u,progress:P,results:res,activity:act,lessonDone:LD}})},
  loadRoster:function(){var d=DB();return D.myClasses().then(function(cls){
   return Promise.all(cls.map(function(c){return d.collection('classes').doc(c.id).collection('members').get().then(function(q){var m=[];q.forEach(function(x){var v=x.data();v.uid=x.id;m.push(v)});c.members=m;return c})})).then(function(cls2){
    var by={};cls2.forEach(function(c){c.members.forEach(function(m){var s=by[m.uid]||(by[m.uid]={uid:m.uid,name:m.displayName||m.email||'طالب',email:m.email||'',classIds:[]});s.classIds.push(c.id)})});
-   var ids=Object.keys(by);return Promise.all(ids.map(function(id){return D.loadStudent(id).then(function(x){var s=by[id];s.progress=x.progress;s.results=x.results;s.activity=x.activity;if(x.profile&&x.profile.displayName)s.name=x.profile.displayName;s.ok=true;return s},function(e){console.warn('student read denied',id,e);var s=by[id];s.progress={};s.results=[];s.activity=[];s.ok=false;return s})})).then(function(st){return{classes:cls2,students:st,loadedAt:Date.now()}})})})},
+   var ids=Object.keys(by);return Promise.all(ids.map(function(id){return D.loadStudent(id).then(function(x){var s=by[id];s.progress=x.progress;s.results=x.results;s.activity=x.activity;s.lessonDone=x.lessonDone||{};if(x.profile&&x.profile.displayName)s.name=x.profile.displayName;s.ok=true;return s},function(e){console.warn('student read denied',id,e);var s=by[id];s.progress={};s.results=[];s.activity=[];s.lessonDone={};s.ok=false;return s})})).then(function(st){return{classes:cls2,students:st,loadedAt:Date.now()}})})})},
  saveTheme:function(n){var r=U();if(r)r.set({theme:n},{merge:true}).catch(function(e){console.warn('theme',e)})},
  touch:function(path,title){var r=U();if(!r)return;var k='tl_'+path;try{if(sessionStorage.getItem(k))return;sessionStorage.setItem(k,1)}catch(e){}
   r.set({lastLesson:{path:path,title:String(title).slice(0,80)}},{merge:true}).catch(function(){})},
@@ -86,15 +86,28 @@ var D=window.TData={CAT:CAT,BADGES:BADGES,level:lvl,stars:stars,
   }).catch(function(e){console.warn('saveGame',e);return null})},
  /* ---- تحميل كل بيانات الطالب ---- */
  load:function(){var r=U();if(!r)return Promise.reject(new Error('no-user'));
-  return Promise.all([r.get(),r.collection('progress').get(),r.collection('quizResults').orderBy('at','desc').limit(30).get(),r.collection('activity').orderBy('at','desc').limit(15).get(),r.collection('achievements').get()]).then(function(a){
-   var P={},xp=0,done=0,s3=0,g1=0,g2=0;a[1].forEach(function(d){var v=d.data();P[d.id]=v;xp+=(v.gameXp||0)+(v.bonusXp||0);if(v.completed){done++;if(d.id.indexOf('g1')===0)g1++;else g2++}if(v.stars===3)s3++});
+  return Promise.all([r.get(),r.collection('progress').get(),r.collection('quizResults').orderBy('at','desc').limit(30).get(),r.collection('activity').orderBy('at','desc').limit(15).get(),r.collection('achievements').get(),r.collection('lessonDone').get()]).then(function(a){
+   var P={},xp=0,done=0,s3=0,g1=0,g2=0,C={},LD={};a[1].forEach(function(d){var v=d.data();P[d.id]=v;xp+=(v.gameXp||0)+(v.bonusXp||0);if(v.completed)C[d.id]=1;if(v.stars===3)s3++});
+   a[5].forEach(function(d){LD[d.id]=d.data();C[d.id]=1;xp+=D.LESSON_XP});Object.keys(C).forEach(function(k){done++;if(k.indexOf('g1')===0)g1++;else g2++});
    var A={};a[4].forEach(function(d){A[d.id]=d.data()});
-   return{user:a[0].exists?a[0].data():{},progress:P,results:a[2].docs.map(function(d){return d.data()}),activity:a[3].docs.map(function(d){return d.data()}),ach:A,stats:{xp:xp,done:done,stars3:s3,g1:g1,g2:g2}}})},
+   return{user:a[0].exists?a[0].data():{},progress:P,results:a[2].docs.map(function(d){return d.data()}),activity:a[3].docs.map(function(d){return d.data()}),ach:A,stats:{xp:xp,done:done,stars3:s3,g1:g1,g2:g2,lessonXp:Object.keys(LD).length*D.LESSON_XP,lessonsByParts:Object.keys(LD).length},lessonDone:LD}})},
  syncBadges:function(){var r=U();if(!r)return Promise.resolve([]);
   return D.load().then(function(d){var add=[];BADGES.forEach(function(b){if(!d.ach[b.id]&&b.ok(d.stats))add.push(b)});
    return Promise.all(add.map(function(b){return r.collection('achievements').doc(b.id).set({id:b.id,earnedAt:TS(),source:'auto'}).then(function(){return b}).catch(function(){return null})}))}).then(function(l){
    l=l.filter(Boolean);l.forEach(function(b){D.toast('🏆 إنجاز جديد: '+b.t)});return l}).catch(function(){return[]})},
  toast:function(t){var e=document.createElement('div');e.className='toast';e.textContent=t;e.style.cssText+=';position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:99999;padding:10px 20px;border-radius:99px;background:var(--gold);color:var(--on-gold);font-weight:900';document.body.appendChild(e);setTimeout(function(){e.remove()},3200)},
+ /* ---- إكمال درس (كل أجزائه) يمنح XP ويرفع المستوى: مرة واحدة لكل درس ---- */
+ LESSON_XP:100,
+ completeLesson:function(id){var r=U(),c=D.find(id);if(!r||!c)return Promise.resolve(null);var ref=r.collection('lessonDone').doc(id);
+  return ref.get().then(function(s){if(s.exists)return null;
+   return D.load().then(function(b){var before=D.level(b.stats.xp).n;
+    return ref.set({lessonId:id,xp:D.LESSON_XP,at:TS()}).then(function(){
+     return r.collection('activity').add({type:'lesson',title:'أكمل كل أجزاء «'+c.title+'»',lessonId:id,xp:D.LESSON_XP,at:TS()}).catch(function(){})}).then(function(){
+     var after=D.level(b.stats.xp+D.LESSON_XP).n;D.toast('+'+D.LESSON_XP+' XP ⚡'+(after>before?' • ارتفع مستواك إلى '+after+' 🚀':''));
+     return D.syncBadges().then(function(){return{xp:D.LESSON_XP,levelUp:after>before,level:after}})})})}).catch(function(e){console.warn('completeLesson',e);return null})},
+ /* مزامنة الدروس المكتملة محليًا ولم تُسجَّل بعد (مثلًا أُكملت بدون إنترنت) */
+ syncLessonDone:function(){if(!window.TSteps||!window.TSTEPS_INDEX)return Promise.resolve();var L=TSteps.summary().lessons.filter(function(x){return x.status==='done'&&x.n});
+  return Promise.all(L.map(function(x){return D.completeLesson(x.id)})).then(function(){})},
  /* ---- تسجيل الدخول في Google Sheets ---- */
  logLogin:function(cred,method){var cfg=window.TECHORA_SHEETS||{},u=TA&&TA.auth&&TA.auth.currentUser;if(!cfg.url||!u)return Promise.resolve();
   var m=method||(cred&&cred.additionalUserInfo&&cred.additionalUserInfo.providerId)||(u.providerData[0]&&u.providerData[0].providerId)||'password';
